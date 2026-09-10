@@ -73,7 +73,7 @@ pub struct Metrics {
 impl Metrics {
     /// Markdown uses generous leading for comfortable long-form reading. The
     /// extra air remains proportional when the user changes the UI font size.
-    const LINE_HEIGHT_MULTIPLIER: f32 = 1.8;
+    const LINE_HEIGHT_MULTIPLIER: f32 = 2.0;
 
     /// Assistant response scale, matching the transcript's body text.
     pub const BODY: Self = Self {
@@ -1977,16 +1977,16 @@ mod tests {
     }
 
     #[test]
-    fn markdown_metrics_keep_prose_and_code_at_one_point_eight_leading() {
+    fn markdown_metrics_keep_prose_and_code_at_two_point_zero_leading() {
         let transcript = Metrics::BODY.scaled(14.0, 13.0);
         assert_eq!(transcript.text_size, 14.0);
-        assert_eq!(transcript.line_height, 25.0);
+        assert_eq!(transcript.line_height, 28.0);
         assert_eq!(transcript.code_text_size, 13.0);
-        assert_eq!(transcript.code_line_height, 23.5);
+        assert_eq!(transcript.code_line_height, 26.0);
 
         let document = Metrics::document(15.0, 10.0);
-        assert_eq!(document.line_height, 27.0);
-        assert_eq!(document.code_line_height, 18.0);
+        assert_eq!(document.line_height, 30.0);
+        assert_eq!(document.code_line_height, 20.0);
     }
 
     #[test]

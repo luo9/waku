@@ -78,7 +78,9 @@ use crate::{
 const TRAFFIC_LIGHT_CLEARANCE: f32 = 86.0;
 #[cfg(not(target_os = "macos"))]
 const TRAFFIC_LIGHT_CLEARANCE: f32 = 8.0;
-const CONTENT_MAX_WIDTH: f32 = 720.0;
+/// Shared readable width for transcript content and the composer, widened 10%
+/// from the original 720px baseline.
+const CONTENT_MAX_WIDTH: f32 = 792.0;
 /// Menu-registry id of the composer's model picker, shared by its render site
 /// and the primary-modifier `/` toggle action.
 const MODEL_PICKER_MENU_ID: &str = "provider-model-picker";
