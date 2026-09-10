@@ -304,11 +304,10 @@ pub fn flatten(
         text.push_str(&run.text);
         let end = text.len();
 
-        let mut run_font = font(if run.style.code {
-            MONO_FAMILY
-        } else {
-            SANS_FAMILY
-        });
+        // Inline code keeps the prose face so a short token does not switch
+        // to a visibly different typeface. Fenced code blocks still use the
+        // bundled mono face in `render_code_block`.
+        let mut run_font = font(SANS_FAMILY);
         run_font.weight = if run.style.bold && base_weight < FontWeight::SEMIBOLD {
             FontWeight::SEMIBOLD
         } else {
@@ -1906,6 +1905,18 @@ mod tests {
         assert_eq!(flat.links[0].1, "https://example.com");
         assert_eq!(flat.code_ranges.len(), 1);
         assert_eq!(&flat.text[flat.code_ranges[0].clone()], "code");
+        let mut offset = 0;
+        let code_font_family = flat.runs.iter().find_map(|run| {
+            let start = offset;
+            offset += run.len;
+            (flat.code_ranges[0].start >= start && flat.code_ranges[0].start < offset)
+                .then_some(run.font.family.as_ref())
+        });
+        assert_eq!(
+            code_font_family,
+            Some(SANS_FAMILY),
+            "inline code should keep the prose font family"
+        );
         assert!(
             flat.runs
                 .iter()
