@@ -1117,7 +1117,8 @@ impl Waku {
                 &palette,
                 self.scaled_markdown_metrics(MarkdownMetrics::COMPACT),
                 self.skills_selection.clone(),
-            );
+            )
+            .with_image_preview_handler(self.markdown_image_preview_handler.clone());
             div()
                 .mt(px(18.0))
                 .pt(px(14.0))

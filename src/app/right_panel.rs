@@ -3294,7 +3294,8 @@ impl Waku {
             MarkdownMetrics::document(self.state.ui_font_size, self.state.code_font_size),
             self.file_preview_selection.clone(),
         )
-        .with_link_handler(self.markdown_link_handler.clone());
+        .with_link_handler(self.markdown_link_handler.clone())
+        .with_image_preview_handler(self.markdown_image_preview_handler.clone());
         let document = md::render::markdown(view, &ctx);
 
         let selection_input = {
