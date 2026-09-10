@@ -34,11 +34,12 @@ fn native_override(preference: ThemePreference) -> Option<bool> {
     }
 }
 
-/// Waku's visual language, take two: neutral graphite surfaces in the spirit
-/// of Cursor — color is reserved for meaning. On macOS the sidebar's semantic
-/// tint is installed as a native layer above Sidebar vibrancy; keeping this
-/// GPUI surface clear avoids incorrectly accumulating the alpha of nested Metal
-/// backgrounds. Selected, hovered, and pressed rows remain a 6% neutral layer.
+/// Waku's visual language uses Codex-like neutral surfaces: near-monochrome
+/// graphite in dark mode, warm white in light mode, and a restrained green for
+/// the few actions that need emphasis. On macOS the sidebar's semantic tint is
+/// installed as a native layer above Sidebar vibrancy; keeping this GPUI
+/// surface clear avoids incorrectly accumulating the alpha of nested Metal
+/// backgrounds. Selected, hovered, and pressed rows remain a neutral layer.
 #[derive(Clone, Copy)]
 pub struct Theme {
     pub is_dark: bool,
@@ -102,41 +103,41 @@ impl Theme {
     pub fn dark() -> Self {
         Self {
             is_dark: true,
-            canvas: rgb(0x1A1A1A).into(),
+            canvas: rgb(0x1F1F1E).into(),
             sidebar: if cfg!(target_os = "macos") {
                 transparent_black()
             } else {
-                rgb(0x181818).into()
+                rgb(0x191918).into()
             },
-            sidebar_drag_background: rgb(0x181818).into(),
-            sidebar_item_background: hsla(0.0, 0.0, 0.941, 0.06),
-            surface: rgb(0x1A1A1A).into(),
-            raised: rgb(0x232323).into(),
-            composer: rgb(0x212121).into(),
-            inset: rgb(0x151515).into(),
-            terminal: rgb(0x151515).into(),
-            overlay: hsla(220.0 / 360.0, 0.10, 0.90, 0.05),
-            overlay_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.09),
+            sidebar_drag_background: rgb(0x191918).into(),
+            sidebar_item_background: hsla(0.0, 0.0, 1.0, 0.055),
+            surface: rgb(0x1F1F1E).into(),
+            raised: rgb(0x292928).into(),
+            composer: rgb(0x272726).into(),
+            inset: rgb(0x171716).into(),
+            terminal: rgb(0x171716).into(),
+            overlay: hsla(0.0, 0.0, 1.0, 0.055),
+            overlay_strong: hsla(0.0, 0.0, 1.0, 0.10),
 
-            border: hsla(220.0 / 360.0, 0.10, 0.90, 0.07),
-            border_strong: hsla(220.0 / 360.0, 0.10, 0.90, 0.14),
-            sidebar_border: hsla(126.93 / 360.0, 0.000_000_1, 0.16077, 1.0),
+            border: hsla(0.0, 0.0, 1.0, 0.075),
+            border_strong: hsla(0.0, 0.0, 1.0, 0.15),
+            sidebar_border: hsla(0.0, 0.0, 1.0, 0.08),
 
-            text: rgb(0xE2E2E2).into(),
-            text_secondary: rgb(0xA3A3A3).into(),
-            text_tertiary: rgb(0x7D7D7D).into(),
-            text_ghost: rgb(0x575757).into(),
+            text: rgb(0xECECEA).into(),
+            text_secondary: rgb(0xB5B5B0).into(),
+            text_tertiary: rgb(0x898984).into(),
+            text_ghost: rgb(0x62625E).into(),
 
-            accent: rgb(0xE2795B).into(),
-            resize_handle: rgb(0x3B82F6).into(),
-            gauge: rgb(0x3B82F6).into(),
+            accent: rgb(0x10A37F).into(),
+            resize_handle: rgb(0x10A37F).into(),
+            gauge: rgb(0x4F8DF7).into(),
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.55),
-            code_text: rgb(0xE0A882).into(),
-            code_wash: hsla(220.0 / 360.0, 0.10, 0.90, 0.08),
+            code_text: rgb(0xD7D7D2).into(),
+            code_wash: hsla(0.0, 0.0, 1.0, 0.075),
 
-            inverse: rgb(0xE7E9EC).into(),
-            on_inverse: rgb(0x17181C).into(),
+            inverse: rgb(0xECECEA).into(),
+            on_inverse: rgb(0x1F1F1E).into(),
 
             warning: rgb(0xE0B36A).into(),
             success: rgb(0x62C987).into(),
@@ -149,41 +150,41 @@ impl Theme {
     pub fn light() -> Self {
         Self {
             is_dark: false,
-            canvas: rgb(0xF6F5F6).into(),
+            canvas: rgb(0xFAFAF9).into(),
             sidebar: if cfg!(target_os = "macos") {
                 transparent_black()
             } else {
-                rgb(0xF3F3F3).into()
+                rgb(0xF4F4F2).into()
             },
-            sidebar_drag_background: rgb(0xF3F3F3).into(),
-            sidebar_item_background: hsla(0.0, 0.0, 0.078, 0.06),
-            surface: rgb(0xF6F5F6).into(),
-            raised: rgb(0xECECEC).into(),
+            sidebar_drag_background: rgb(0xF4F4F2).into(),
+            sidebar_item_background: hsla(0.0, 0.0, 0.0, 0.045),
+            surface: rgb(0xFAFAF9).into(),
+            raised: rgb(0xF1F1EF).into(),
             composer: rgb(0xFFFFFF).into(),
-            inset: rgb(0xE6E6E6).into(),
+            inset: rgb(0xF3F3F1).into(),
             terminal: rgb(0xFFFFFF).into(),
-            overlay: hsla(220.0 / 360.0, 0.10, 0.12, 0.05),
-            overlay_strong: hsla(220.0 / 360.0, 0.10, 0.12, 0.09),
+            overlay: hsla(0.0, 0.0, 0.0, 0.045),
+            overlay_strong: hsla(0.0, 0.0, 0.0, 0.085),
 
-            border: hsla(220.0 / 360.0, 0.10, 0.12, 0.08),
-            border_strong: hsla(220.0 / 360.0, 0.10, 0.12, 0.15),
-            sidebar_border: hsla(0.0, 0.0, 0.078, 0.12),
+            border: hsla(0.0, 0.0, 0.0, 0.09),
+            border_strong: hsla(0.0, 0.0, 0.0, 0.17),
+            sidebar_border: hsla(0.0, 0.0, 0.0, 0.10),
 
-            text: rgb(0x242424).into(),
-            text_secondary: rgb(0x666666).into(),
-            text_tertiary: rgb(0x858585).into(),
-            text_ghost: rgb(0xA4A4A4).into(),
+            text: rgb(0x2D2D2A).into(),
+            text_secondary: rgb(0x666662).into(),
+            text_tertiary: rgb(0x858580).into(),
+            text_ghost: rgb(0xA6A6A0).into(),
 
-            accent: rgb(0xC85F44).into(),
-            resize_handle: rgb(0x2563EB).into(),
-            gauge: rgb(0x2563EB).into(),
+            accent: rgb(0x0F8A6B).into(),
+            resize_handle: rgb(0x0F8A6B).into(),
+            gauge: rgb(0x3978E8).into(),
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.35),
-            code_text: rgb(0x9A5528).into(),
-            code_wash: hsla(220.0 / 360.0, 0.10, 0.12, 0.07),
+            code_text: rgb(0x444440).into(),
+            code_wash: hsla(0.0, 0.0, 0.0, 0.045),
 
-            inverse: rgb(0x202227).into(),
-            on_inverse: rgb(0xF8F8F9).into(),
+            inverse: rgb(0x2D2D2A).into(),
+            on_inverse: rgb(0xFAFAF9).into(),
 
             warning: rgb(0xA66B20).into(),
             success: rgb(0x2F8F52).into(),
