@@ -1859,7 +1859,7 @@ fn render_mermaid_block(
         .into_any_element()
 }
 
-fn code_copy_button(key: &TextKey, content: SharedString, ctx: &Ctx) -> gpui::Div {
+fn code_copy_button(key: &TextKey, content: SharedString, ctx: &Ctx) -> impl IntoElement {
     let keyboard_content = content.clone();
     let copy_feedback = ctx.cache.map(|view| view.copied_code_blocks.clone());
     let copied = copy_feedback
