@@ -3304,7 +3304,8 @@ impl Waku {
         )
         .with_math_enabled(self.state.render_math)
         .with_math_context_menu(self.menu_handle("file-preview-math", cx))
-        .with_link_handler(self.markdown_link_handler.clone());
+        .with_link_handler(self.markdown_link_handler.clone())
+        .with_image_preview_handler(self.markdown_image_preview_handler.clone());
         let document = md::render::markdown(view, &ctx);
 
         let selection_input = {

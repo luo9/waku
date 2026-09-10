@@ -1163,6 +1163,7 @@ impl Waku {
         MarkdownCtx::new(row, palette, metrics, self.transcript_selection.clone())
             .with_math_enabled(self.state.render_math)
             .with_link_handler(self.markdown_link_handler.clone())
+            .with_image_preview_handler(self.markdown_image_preview_handler.clone())
             .with_streaming_animation(animate_streaming)
     }
 

@@ -1574,6 +1574,9 @@ pub struct Waku {
     /// callback knows about the active workspace; the renderer deliberately
     /// does not.
     markdown_link_handler: md::render::LinkHandler,
+    /// Opens Mermaid's in-memory SVG through the same modal as image
+    /// attachments, without coupling the Markdown renderer to `Waku`.
+    markdown_image_preview_handler: md::render::ImagePreviewHandler,
     /// Transcript-wide text selection, spanning messages and tool output.
     transcript_selection: TranscriptSelection,
     /// Programmatic focus for the transcript canvas. Clicking the transcript
@@ -2713,6 +2716,14 @@ impl Waku {
                     }
                 })
             };
+            let markdown_image_preview_handler: md::render::ImagePreviewHandler = {
+                let waku = cx.entity().downgrade();
+                Rc::new(move |image, name, window, cx| {
+                    let _ = waku.update(cx, |waku, cx| {
+                        waku.open_image_preview(image, name, window, cx);
+                    });
+                })
+            };
 
             Self {
                 daemon,
@@ -2995,6 +3006,7 @@ impl Waku {
                 activity_diffs: RefCell::new(HashMap::new()),
                 activity_diff_viewports: RefCell::new(HashMap::new()),
                 markdown_link_handler,
+                markdown_image_preview_handler,
                 transcript_selection: TranscriptSelection::default(),
                 transcript_focus: cx.focus_handle(),
                 transcript_search: None,

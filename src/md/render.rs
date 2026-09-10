@@ -90,6 +90,12 @@ pub type TranscriptSelection = SelectionState<TextGeometry>;
 /// markdown view continues to use GPUI's ordinary URL opener.
 pub type LinkHandler = Rc<dyn Fn(&str, &mut Window, &mut gpui::App)>;
 
+/// App-owned opener for an image that Markdown produced in memory. Keeping the
+/// callback outside the renderer lets Markdown remain independent of Waku's
+/// modal state while diagrams share the attachment preview surface.
+pub type ImagePreviewHandler =
+    Rc<dyn Fn(Arc<gpui::Image>, SharedString, &mut Window, &mut gpui::App)>;
+
 // ── Layout metrics ─────────────────────────────────────────────────────────
 //
 // Everything in this block participates in measurement, so these are the only
@@ -848,6 +854,7 @@ pub struct Ctx<'a> {
     selection: TranscriptSelection,
     search: Option<SearchHighlights>,
     link_handler: Option<LinkHandler>,
+    image_preview_handler: Option<ImagePreviewHandler>,
     /// Cross-frame flatten cache, when this render has one to consult.
     cache: Option<&'a MarkdownView>,
     next_ordinal: Cell<usize>,
@@ -874,6 +881,7 @@ impl<'a> Ctx<'a> {
             selection,
             search: None,
             link_handler: None,
+            image_preview_handler: None,
             cache: None,
             next_ordinal: Cell::new(0),
             starts_block: Cell::new(true),
@@ -891,6 +899,11 @@ impl<'a> Ctx<'a> {
 
     pub fn with_link_handler(mut self, handler: LinkHandler) -> Self {
         self.link_handler = Some(handler);
+        self
+    }
+
+    pub fn with_image_preview_handler(mut self, handler: ImagePreviewHandler) -> Self {
+        self.image_preview_handler = Some(handler);
         self
     }
 
@@ -931,6 +944,7 @@ impl<'a> Ctx<'a> {
             selection: self.selection.clone(),
             search: self.search.clone(),
             link_handler: self.link_handler.clone(),
+            image_preview_handler: self.image_preview_handler.clone(),
             cache: Some(view),
             next_ordinal: Cell::new(self.next_ordinal.get()),
             starts_block: Cell::new(self.starts_block.get()),
@@ -2034,6 +2048,10 @@ fn render_mermaid_block(
     ctx: &Ctx,
 ) -> AnyElement {
     let copy_button = code_copy_button(key, SharedString::from(code.to_owned()), ctx);
+    let preview_image = image.clone();
+    let preview_name = SharedString::from("Mermaid diagram");
+    let keyboard_preview_image = image.clone();
+    let keyboard_preview_name = preview_name.clone();
     div()
         .id(SharedString::from(format!(
             "mermaid-block-{}-{}",
@@ -2070,12 +2088,54 @@ fn render_mermaid_block(
                 .child(copy_button),
         )
         .child(
-            div().w_full().min_w_0().p(px(10.0)).child(
-                img(image)
-                    .max_w(relative(1.0))
-                    .max_h(px(480.0))
-                    .object_fit(gpui::ObjectFit::ScaleDown),
-            ),
+            div()
+                .id(SharedString::from(format!(
+                    "mermaid-preview-{}-{}",
+                    key.row, key.index
+                )))
+                .w_full()
+                .min_w_0()
+                .p(px(10.0))
+                .cursor_default()
+                .when_some(
+                    ctx.image_preview_handler.clone(),
+                    move |element, handler| {
+                        let click_handler = handler.clone();
+                        let key_handler = handler;
+                        element
+                            .tab_index(0)
+                            .focus_visible(|style| {
+                                style.border_1().border_color(ctx.palette.accent)
+                            })
+                            .tooltip(Tooltip::text("Open full size"))
+                            .on_click(move |_, window, cx| {
+                                click_handler(
+                                    preview_image.clone(),
+                                    preview_name.clone(),
+                                    window,
+                                    cx,
+                                );
+                                cx.stop_propagation();
+                            })
+                            .on_key_down(move |event: &KeyDownEvent, window, cx| {
+                                if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                                    key_handler(
+                                        keyboard_preview_image.clone(),
+                                        keyboard_preview_name.clone(),
+                                        window,
+                                        cx,
+                                    );
+                                    cx.stop_propagation();
+                                }
+                            })
+                    },
+                )
+                .child(
+                    img(image)
+                        .max_w(relative(1.0))
+                        .max_h(px(480.0))
+                        .object_fit(gpui::ObjectFit::ScaleDown),
+                ),
         )
         .into_any_element()
 }
