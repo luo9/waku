@@ -1316,6 +1316,7 @@ impl Waku {
                         .then(|| {
                             let view = markdown.entry(message.id).or_default();
                             view.set_text(message.visible_content(), message.streaming);
+                            view.prepare_mermaid(&palette, cx);
                             &*view
                         });
                     let rendered = render_message(
@@ -2195,6 +2196,7 @@ impl Waku {
                     self.reasoning_window_starts.borrow_mut().remove(&id);
                     view.set_text(&reasoning.content, false);
                 }
+                view.prepare_mermaid(&palette, cx);
                 let wheel_scroll = reasoning_viewport.scroll_handle.clone();
                 let wheel_follow_tail = reasoning_viewport.follow_tail.clone();
                 let markdown = if reasoning_live {

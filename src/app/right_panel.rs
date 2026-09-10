@@ -3287,6 +3287,7 @@ impl Waku {
         }
         let (_, view) = cache.as_mut().expect("entry ensured above");
         view.set_text(editor_state.read(cx).content(), false);
+        view.prepare_mermaid(&palette, cx);
         let ctx = MarkdownCtx::new(
             format!("file-preview-{relative_path}"),
             &palette,

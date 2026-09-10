@@ -1111,6 +1111,7 @@ impl Waku {
             }
             let (_, view) = cache.as_mut().expect("entry ensured above");
             view.set_text(&skill.body, false);
+            view.prepare_mermaid(&palette, cx);
             let ctx = MarkdownCtx::new(
                 format!("skill-md-{}", skill.row_key),
                 &palette,
