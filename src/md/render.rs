@@ -19,11 +19,13 @@
 //! without ever reflowing, and what keeps the transcript's row measurements
 //! stable while a selection is dragged across it.
 
+use std::borrow::Cow;
 use std::cell::{Cell, RefCell};
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::ops::Range;
 use std::rc::Rc;
-use std::sync::LazyLock;
+<<<<<<< HEAD
+use std::sync::{Arc, LazyLock};
 use std::time::{Duration, Instant};
 
 use gpui::{
@@ -495,7 +497,20 @@ pub struct MarkdownView {
     /// outside the parsed/flattened caches so a three-second icon change never
     /// invalidates text shaping.
     copied_code_blocks: Rc<RefCell<HashMap<usize, u64>>>,
+    /// Mermaid source is converted to SVG off the UI thread. The render pass
+    /// only looks up a prepared image, so a long transcript never relayouts a
+    /// diagram or reparses its source on a frame.
+    mermaid: Rc<RefCell<HashMap<String, MermaidState>>>,
+    mermaid_theme: RefCell<Option<Palette>>,
+    mermaid_dirty: Cell<bool>,
+    mermaid_generation: Rc<Cell<u64>>,
     streaming: Cell<bool>,
+}
+
+enum MermaidState {
+    Pending,
+    Ready(Arc<gpui::Image>),
+    Failed,
 }
 
 impl Default for MarkdownView {
@@ -514,6 +529,10 @@ impl MarkdownView {
             style: Cell::new(None),
             veil: RefCell::new(RowVeil::default()),
             copied_code_blocks: Rc::new(RefCell::new(HashMap::new())),
+            mermaid: Rc::new(RefCell::new(HashMap::new())),
+            mermaid_theme: RefCell::new(None),
+            mermaid_dirty: Cell::new(true),
+            mermaid_generation: Rc::new(Cell::new(0)),
             streaming: Cell::new(false),
         }
     }
@@ -560,6 +579,7 @@ impl MarkdownView {
         // row on every frame, so a frame that changed neither input must not
         // pay for it.
         if changed || mend != was_streaming {
+            self.mermaid_dirty.set(true);
             let tail = if mend {
                 self.parser.display_tail().unwrap_or_default()
             } else {
@@ -576,6 +596,85 @@ impl MarkdownView {
                     .retain(|ordinal, _| *ordinal < boundary);
             }
         }
+    }
+
+    /// Queue every settled Mermaid block for background SVG rendering. This is
+    /// called from the owning view's update path, never from Markdown's row
+    /// builder; a miss keeps rendering the normal fenced source until the SVG
+    /// arrives.
+    pub fn prepare_mermaid<V: 'static>(&self, palette: &Palette, cx: &mut gpui::Context<V>) {
+        if self.streaming.get() {
+            return;
+        }
+        let theme = *palette;
+        let theme_changed = self.mermaid_theme.borrow().as_ref() != Some(&theme);
+        if !self.mermaid_dirty.get() && !theme_changed {
+            return;
+        }
+        self.mermaid_dirty.set(false);
+        *self.mermaid_theme.borrow_mut() = Some(theme.clone());
+
+        let mut sources = HashSet::new();
+        for block in self.blocks() {
+            mermaid_sources(block, &mut sources);
+        }
+
+        let generation = self.mermaid_generation.get().wrapping_add(1);
+        self.mermaid_generation.set(generation);
+        let requested = {
+            let mut cached = self.mermaid.borrow_mut();
+            if theme_changed {
+                cached.clear();
+            } else {
+                cached.retain(|source, _| sources.contains(source));
+            }
+            let mut requested = Vec::new();
+            for source in sources {
+                if !cached.contains_key(&source) {
+                    cached.insert(source.clone(), MermaidState::Pending);
+                    requested.push(source);
+                }
+            }
+            requested
+        };
+        if requested.is_empty() {
+            return;
+        }
+
+        let cache = self.mermaid.clone();
+        let current_generation = self.mermaid_generation.clone();
+        cx.spawn(async move |this, cx| {
+            let rendered = cx
+                .background_executor()
+                .spawn(async move {
+                    requested
+                        .into_iter()
+                        .map(|source| {
+                            let result = render_mermaid_svg(&source, &theme);
+                            (source, result)
+                        })
+                        .collect::<Vec<_>>()
+                })
+                .await;
+            let _ = this.update(cx, |_, cx| {
+                if current_generation.get() != generation {
+                    return;
+                }
+                let mut cached = cache.borrow_mut();
+                for (source, result) in rendered {
+                    let state = match result {
+                        Ok(svg) => MermaidState::Ready(Arc::new(gpui::Image::from_bytes(
+                            gpui::ImageFormat::Svg,
+                            svg.into_bytes(),
+                        ))),
+                        Err(_) => MermaidState::Failed,
+                    };
+                    cached.insert(source, state);
+                }
+                cx.notify();
+            });
+        })
+        .detach();
     }
 
     pub fn is_fading(&self) -> bool {
@@ -614,6 +713,101 @@ impl MarkdownView {
             .chain(self.tail.iter())
             .map(|top| &top.block)
     }
+
+    fn mermaid_image(&self, source: &str) -> Option<Arc<gpui::Image>> {
+        match self.mermaid.borrow().get(source) {
+            Some(MermaidState::Ready(image)) => Some(image.clone()),
+            Some(MermaidState::Pending | MermaidState::Failed) | None => None,
+        }
+    }
+}
+
+fn mermaid_sources(block: &Block, sources: &mut HashSet<String>) {
+    match block {
+        Block::CodeBlock { language, code } if is_mermaid_language(language.as_deref()) => {
+            sources.insert(code.clone());
+        }
+        Block::BlockQuote { children } => {
+            for child in children {
+                mermaid_sources(child, sources);
+            }
+        }
+        Block::List { items, .. } => {
+            for item in items {
+                for child in &item.blocks {
+                    mermaid_sources(child, sources);
+                }
+            }
+        }
+        Block::Paragraph { .. }
+        | Block::Image { .. }
+        | Block::Heading { .. }
+        | Block::Table { .. }
+        | Block::Rule
+        | Block::CodeBlock { .. } => {}
+    }
+}
+
+fn is_mermaid_language(language: Option<&str>) -> bool {
+    language.is_some_and(|language| language.trim().eq_ignore_ascii_case("mermaid"))
+}
+
+fn svg_color(color: Hsla) -> String {
+    let color = color.to_rgb();
+    let component = |value: f32| (value.clamp(0.0, 1.0) * 255.0).round() as u8;
+    format!(
+        "#{:02x}{:02x}{:02x}",
+        component(color.r),
+        component(color.g),
+        component(color.b),
+    )
+}
+
+fn render_mermaid_svg(source: &str, palette: &Palette) -> Result<String, String> {
+    if source.len() > 64 * 1024 {
+        return Err("Mermaid source is too large".to_owned());
+    }
+    let diagram = mermaid_svg::parse(source).map_err(|error| error.to_string())?;
+
+    let mut theme = if palette.is_dark {
+        mermaid_svg::Theme::dark()
+    } else {
+        mermaid_svg::Theme::default_theme()
+    };
+    let surface = svg_owned(palette.inset);
+    let node_fill = svg_owned(palette.overlay);
+    let border = svg_owned(palette.border);
+    let text = svg_owned(palette.text);
+    let muted = svg_owned(palette.ghost);
+    theme.bg = surface.clone();
+    theme.fg = text.clone();
+    theme.fg_muted = muted.clone();
+    theme.actor_fill = node_fill.clone();
+    theme.actor_stroke = border.clone();
+    theme.actor_text_color = Some(text.clone());
+    theme.lifeline = muted;
+    theme.arrow_stroke = border.clone();
+    theme.signal_text_color = Some(text.clone());
+    theme.note_fill = surface.clone();
+    theme.note_stroke = border.clone();
+    theme.activation_fill = node_fill.clone();
+    theme.activation_stroke = border.clone();
+    theme.frame_label_fill = node_fill.clone();
+    theme.title_color = Some(text.clone());
+    theme.flow_node_fill = node_fill;
+    theme.flow_node_stroke = border.clone();
+    theme.flow_edge_stroke = border.clone();
+    theme.flow_label_bg = surface.clone();
+    theme.flow_cluster_fill = surface;
+    theme.flow_cluster_stroke = border;
+    theme.font_family = Cow::Borrowed("-apple-system, BlinkMacSystemFont, sans-serif");
+    theme.responsive = false;
+
+    mermaid_svg::render_diagram_with(&diagram, &theme).map_err(|error| error.to_string())
+}
+
+fn svg_owned(color: Hsla) -> Cow<'static, str> {
+    Cow::Owned(svg_color(color))
 }
 
 // ── Render context ─────────────────────────────────────────────────────────
@@ -1718,6 +1912,11 @@ pub fn decode_data_url(url: &str) -> Option<std::sync::Arc<gpui::Image>> {
 
 fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElement {
     let key = ctx.next_key();
+    if is_mermaid_language(language)
+        && let Some(image) = ctx.cache.and_then(|view| view.mermaid_image(code))
+    {
+        return render_mermaid_block(&key, code, image, ctx);
+    }
     // Tokenizing is the most expensive flatten in the document, so a settled
     // code block is exactly the case the cache exists for.
     let flat = ctx.flat(key.index, || {
@@ -1737,58 +1936,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
     // Reuse the cached shaped string. Settled code blocks render every frame,
     // so cloning the whole source here would turn the copy affordance into a
     // permanent O(code length) render cost; allocate only when it is invoked.
-    let copy_content = flat.text.clone();
-    let keyboard_copy_content = copy_content.clone();
-    let copy_feedback = ctx.cache.map(|view| view.copied_code_blocks.clone());
-    let copied = copy_feedback
-        .as_ref()
-        .is_some_and(|feedback| feedback.borrow().contains_key(&key.index));
-    let keyboard_copy_feedback = copy_feedback.clone();
-    let ordinal = key.index;
-    let copy_button = div()
-        .id(SharedString::from(format!(
-            "copy-code-{}-{}",
-            key.row, key.index
-        )))
-        .tab_index(0)
-        .size(px(24.0))
-        .flex_none()
-        .rounded(px(5.0))
-        .flex()
-        .items_center()
-        .justify_center()
-        .cursor_default()
-        .focus_visible(|style| style.border_1().border_color(ctx.palette.accent))
-        .hover(|style| style.bg(ctx.palette.overlay))
-        .child(crate::ui::icon(
-            if copied {
-                "icons/check.svg"
-            } else {
-                "icons/copy.svg"
-            },
-            11.0,
-            ctx.palette.ghost,
-        ))
-        .tooltip(Tooltip::text(if copied {
-            tr!("common.copied")
-        } else {
-            tr!("common.copy_code")
-        }))
-        .on_click(move |_, _, cx| {
-            cx.write_to_clipboard(ClipboardItem::new_string(copy_content.to_string()));
-            if let Some(feedback) = copy_feedback.clone() {
-                show_code_copied(feedback, ordinal, cx);
-            }
-        })
-        .on_key_down(move |event: &KeyDownEvent, _, cx| {
-            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
-                cx.write_to_clipboard(ClipboardItem::new_string(keyboard_copy_content.to_string()));
-                if let Some(feedback) = keyboard_copy_feedback.clone() {
-                    show_code_copied(feedback, ordinal, cx);
-                }
-                cx.stop_propagation();
-            }
-        });
+    let copy_button = code_copy_button(&key, flat.text.clone(), ctx);
 
     div()
         .id(SharedString::from(format!(
@@ -1851,6 +1999,113 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
                 ),
         )
         .into_any_element()
+}
+
+fn render_mermaid_block(
+    key: &TextKey,
+    code: &str,
+    image: Arc<gpui::Image>,
+    ctx: &Ctx,
+) -> AnyElement {
+    let copy_button = code_copy_button(key, SharedString::from(code.to_owned()), ctx);
+    div()
+        .id(SharedString::from(format!(
+            "mermaid-block-{}-{}",
+            key.row, key.index
+        )))
+        .tab_group()
+        .tab_stop(false)
+        .w_full()
+        .min_w_0()
+        .rounded(px(8.0))
+        .border_1()
+        .border_color(ctx.palette.border)
+        .bg(ctx.palette.inset)
+        .overflow_hidden()
+        .child(
+            div()
+                .w_full()
+                .h(px(28.0))
+                .pl(px(10.0))
+                .pr(px(2.0))
+                .flex()
+                .items_center()
+                .border_b_1()
+                .border_color(ctx.palette.border)
+                .child(
+                    div()
+                        .flex_1()
+                        .text_size(px(12.5))
+                        .line_height(px(14.0))
+                        .font_weight(FontWeight::MEDIUM)
+                        .text_color(ctx.palette.ghost)
+                        .child("mermaid"),
+                )
+                .child(copy_button),
+        )
+        .child(
+            div().w_full().min_w_0().p(px(10.0)).child(
+                img(image)
+                    .max_w(relative(1.0))
+                    .max_h(px(480.0))
+                    .object_fit(gpui::ObjectFit::ScaleDown),
+            ),
+        )
+        .into_any_element()
+}
+
+fn code_copy_button(key: &TextKey, content: SharedString, ctx: &Ctx) -> gpui::Div {
+    let keyboard_content = content.clone();
+    let copy_feedback = ctx.cache.map(|view| view.copied_code_blocks.clone());
+    let copied = copy_feedback
+        .as_ref()
+        .is_some_and(|feedback| feedback.borrow().contains_key(&key.index));
+    let keyboard_copy_feedback = copy_feedback.clone();
+    let ordinal = key.index;
+    div()
+        .id(SharedString::from(format!(
+            "copy-code-{}-{}",
+            key.row, key.index
+        )))
+        .tab_index(0)
+        .size(px(24.0))
+        .flex_none()
+        .rounded(px(5.0))
+        .flex()
+        .items_center()
+        .justify_center()
+        .cursor_default()
+        .focus_visible(|style| style.border_1().border_color(ctx.palette.accent))
+        .hover(|style| style.bg(ctx.palette.overlay))
+        .child(crate::ui::icon(
+            if copied {
+                "icons/check.svg"
+            } else {
+                "icons/copy.svg"
+            },
+            11.0,
+            ctx.palette.ghost,
+        ))
+        .tooltip(Tooltip::text(if copied {
+            tr!("common.copied")
+        } else {
+            tr!("common.copy_code")
+        }))
+        .on_click(move |_, _, cx| {
+            cx.write_to_clipboard(ClipboardItem::new_string(content.to_string()));
+            if let Some(feedback) = copy_feedback.clone() {
+                show_code_copied(feedback, ordinal, cx);
+            }
+        })
+        .on_key_down(move |event: &KeyDownEvent, _, cx| {
+            if matches!(event.keystroke.key.as_str(), "enter" | "space") {
+                cx.write_to_clipboard(ClipboardItem::new_string(keyboard_content.to_string()));
+                if let Some(feedback) = keyboard_copy_feedback.clone() {
+                    show_code_copied(feedback, ordinal, cx);
+                }
+                cx.stop_propagation();
+            }
+        })
 }
 
 /// `TextRun`s that tile `code` exactly, colored by the lexer. Every run shares
