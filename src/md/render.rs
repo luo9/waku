@@ -769,26 +769,38 @@ fn render_mermaid_svg(source: &str, palette: &Palette) -> Result<String, String>
     }
     let diagram = mermaid_svg::parse(source).map_err(|error| error.to_string())?;
 
-    let mut theme = if palette.is_dark {
-        mermaid_svg::Theme::dark()
-    } else {
-        mermaid_svg::Theme::default_theme()
-    };
-    let surface = svg_owned(palette.inset);
-    let node_fill = svg_owned(palette.overlay);
-    let border = svg_owned(palette.border);
+    // SVG colors cannot inherit GPUI's compositing. `overlay` and `border`
+    // are translucent layers, so flatten them over the diagram canvas before
+    // handing them to mermaid-svg; otherwise dark mode turns them white and
+    // light mode turns them black.
+    let canvas = palette.inset;
+    let mut theme = mermaid_svg::Theme::default_theme();
+    let surface = svg_owned(canvas);
+    let node_fill = svg_owned(canvas.blend(palette.overlay));
+    let note_fill = svg_owned(canvas.blend(palette.code_wash));
+    let border = svg_owned(canvas.blend(palette.border));
+    let line = svg_owned(palette.tertiary);
     let text = svg_owned(palette.text);
-    let muted = svg_owned(palette.ghost);
+    let muted = line.clone();
+    let colors = vec![
+        svg_owned(palette.accent),
+        svg_owned(palette.token(TokenClass::Type)),
+        svg_owned(palette.token(TokenClass::Literal)),
+        svg_owned(palette.token(TokenClass::Keyword)),
+        svg_owned(palette.token(TokenClass::String)),
+        svg_owned(palette.added),
+        svg_owned(palette.removed),
+    ];
     theme.bg = surface.clone();
     theme.fg = text.clone();
     theme.fg_muted = muted.clone();
     theme.actor_fill = node_fill.clone();
     theme.actor_stroke = border.clone();
     theme.actor_text_color = Some(text.clone());
-    theme.lifeline = muted;
-    theme.arrow_stroke = border.clone();
+    theme.lifeline = line.clone();
+    theme.arrow_stroke = line.clone();
     theme.signal_text_color = Some(text.clone());
-    theme.note_fill = surface.clone();
+    theme.note_fill = note_fill.clone();
     theme.note_stroke = border.clone();
     theme.activation_fill = node_fill.clone();
     theme.activation_stroke = border.clone();
@@ -796,10 +808,24 @@ fn render_mermaid_svg(source: &str, palette: &Palette) -> Result<String, String>
     theme.title_color = Some(text.clone());
     theme.flow_node_fill = node_fill;
     theme.flow_node_stroke = border.clone();
-    theme.flow_edge_stroke = border.clone();
-    theme.flow_label_bg = surface.clone();
-    theme.flow_cluster_fill = surface;
-    theme.flow_cluster_stroke = border;
+    theme.flow_edge_stroke = line;
+    theme.flow_label_bg = note_fill;
+    theme.flow_cluster_fill = surface.clone();
+    theme.flow_cluster_stroke = border.clone();
+    theme.cscale_palette = Cow::Owned(colors.clone());
+    theme.pie_palette = Cow::Owned(colors.clone());
+    theme.git_palette = Cow::Owned(colors.clone());
+    theme.xychart_palette = Cow::Owned(colors);
+    theme.pie_stroke = Some(border.clone());
+    theme.pie_opacity = Some(Cow::Borrowed("0.88"));
+    theme.commit_label_color = Some(text.clone());
+    theme.tag_label_color = Some(text.clone());
+    theme.quadrant_default_fills = [
+        svg_owned(canvas.blend(palette.accent.opacity(0.16))),
+        svg_owned(canvas.blend(palette.token(TokenClass::Type).opacity(0.16))),
+        svg_owned(canvas.blend(palette.token(TokenClass::Literal).opacity(0.16))),
+        svg_owned(canvas.blend(palette.token(TokenClass::Keyword).opacity(0.16))),
+    ];
     theme.font_family = Cow::Borrowed("-apple-system, BlinkMacSystemFont, sans-serif");
     theme.responsive = false;
 
