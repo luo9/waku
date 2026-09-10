@@ -71,12 +71,16 @@ pub struct Metrics {
 }
 
 impl Metrics {
+    /// Markdown uses generous leading for comfortable long-form reading. The
+    /// extra air remains proportional when the user changes the UI font size.
+    const LINE_HEIGHT_MULTIPLIER: f32 = 1.8;
+
     /// Assistant response scale, matching the transcript's body text.
     pub const BODY: Self = Self {
         text_size: 14.0,
-        line_height: 21.0,
+        line_height: 14.0 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 13.0 * Self::LINE_HEIGHT_MULTIPLIER,
         block_gap: 10.0,
     };
 
@@ -84,9 +88,9 @@ impl Metrics {
     /// geometry instead of making every existing plain prompt subtly reflow.
     pub const USER_MESSAGE: Self = Self {
         text_size: 14.5,
-        line_height: 21.0,
+        line_height: 14.5 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 13.0 * Self::LINE_HEIGHT_MULTIPLIER,
         block_gap: 10.0,
     };
 
@@ -95,9 +99,9 @@ impl Metrics {
     /// text stays close to prose size and leans on color for its hierarchy.
     pub const COMPACT: Self = Self {
         text_size: 13.5,
-        line_height: 19.5,
+        line_height: 13.5 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 13.0 * Self::LINE_HEIGHT_MULTIPLIER,
         block_gap: 7.0,
     };
 
@@ -130,9 +134,9 @@ impl Metrics {
     pub fn document(text_size: f32, code_text_size: f32) -> Self {
         Self {
             text_size,
-            line_height: (text_size * 1.55).round(),
+            line_height: (text_size * Self::LINE_HEIGHT_MULTIPLIER).round(),
             code_text_size,
-            code_line_height: (code_text_size * 1.5).round(),
+            code_line_height: (code_text_size * Self::LINE_HEIGHT_MULTIPLIER).round(),
             block_gap: (text_size * 0.72).round(),
         }
     }
@@ -1970,6 +1974,19 @@ mod tests {
         let plain = code_runs(code, None, &code_font, &palette());
         assert_eq!(plain.iter().map(|run| run.len).sum::<usize>(), code.len());
         assert_eq!(plain.len(), 1);
+    }
+
+    #[test]
+    fn markdown_metrics_keep_prose_and_code_at_one_point_eight_leading() {
+        let transcript = Metrics::BODY.scaled(14.0, 13.0);
+        assert_eq!(transcript.text_size, 14.0);
+        assert_eq!(transcript.line_height, 25.0);
+        assert_eq!(transcript.code_text_size, 13.0);
+        assert_eq!(transcript.code_line_height, 23.5);
+
+        let document = Metrics::document(15.0, 10.0);
+        assert_eq!(document.line_height, 27.0);
+        assert_eq!(document.code_line_height, 18.0);
     }
 
     #[test]
