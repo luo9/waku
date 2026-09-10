@@ -1,0 +1,40 @@
+name: Build macOS app
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: build-macos-app-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: macos-14
+    timeout-minutes: 90
+
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Install Rust
+        run: |
+          rustup toolchain install 1.96.0 --profile minimal
+          rustup default 1.96.0
+
+      - name: Build self-contained app
+        run: |
+          ./scripts/bundle.sh release
+          codesign --verify --deep --strict --verbose=2 target/release/Waku.app
+          ditto -c -k --sequesterRsrc --keepParent \
+            target/release/Waku.app \
+            Waku-macos-arm64.zip
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: Waku-macos-arm64
+          path: Waku-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 7
