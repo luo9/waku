@@ -159,7 +159,7 @@ pub const MONO_FAMILY: &str = "JetBrains Mono";
 /// Inline-code wash geometry. Paint-only: the box overhangs the glyphs
 /// horizontally and insets vertically inside the line box.
 const CODE_WASH_RADIUS: f32 = 4.0;
-const CODE_WASH_PAD_X: f32 = 2.5;
+const CODE_WASH_PAD_X: f32 = 4.5;
 const CODE_WASH_INSET_Y: f32 = 1.5;
 
 /// Heading scale relative to body text, by level.
