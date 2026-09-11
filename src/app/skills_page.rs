@@ -1118,9 +1118,9 @@ impl Waku {
                 self.scaled_markdown_metrics(MarkdownMetrics::COMPACT),
                 self.skills_selection.clone(),
             )
-        .with_math_enabled(self.state.render_math)
-        .with_math_context_menu(self.menu_handle("skill-detail-math", cx))
-        .with_image_preview_handler(self.markdown_image_preview_handler.clone());
+            .with_math_enabled(self.state.render_math)
+            .with_math_context_menu(self.menu_handle("skill-detail-math", cx))
+            .with_image_preview_handler(self.markdown_image_preview_handler.clone());
             div()
                 .mt(px(18.0))
                 .pt(px(14.0))
