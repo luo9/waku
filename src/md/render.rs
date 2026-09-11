@@ -870,7 +870,7 @@ fn prefer_linear_flowchart_paths(diagram: &mut mermaid_svg::Diagram) {
         && flowchart.config_curve.is_none()
         && flowchart.default_interpolate.is_none()
     {
-        flowchart.config_curve = Some(mermaid_svg::EdgeCurve::Linear);
+        flowchart.config_curve = Some(mermaid_svg::ast::EdgeCurve::Linear);
     }
 }
 
@@ -2608,7 +2608,7 @@ mod tests {
         };
         assert_eq!(
             default_flowchart.config_curve,
-            Some(mermaid_svg::EdgeCurve::Linear)
+            Some(mermaid_svg::ast::EdgeCurve::Linear)
         );
 
         let mut explicit_curve = mermaid_svg::parse(
@@ -2621,7 +2621,7 @@ mod tests {
         };
         assert_eq!(
             explicit_flowchart.config_curve,
-            Some(mermaid_svg::EdgeCurve::Step)
+            Some(mermaid_svg::ast::EdgeCurve::Step)
         );
     }
 
