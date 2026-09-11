@@ -702,7 +702,13 @@ fn render_mermaid_svg(source: &str, palette: &Palette) -> Result<String, String>
     if source.len() > 64 * 1024 {
         return Err("Mermaid source is too large".to_owned());
     }
-    let diagram = mermaid_svg::parse(source).map_err(|error| error.to_string())?;
+    let mut diagram = mermaid_svg::parse(source).map_err(|error| error.to_string())?;
+
+    // `curveBasis` rounds a routed polyline through its control points. On a
+    // dense flowchart those curves can bow back into nearby nodes or arrows;
+    // a linear path follows the layout engine's collision-aware waypoints
+    // exactly. Explicit diagram and edge-level curve choices still win.
+    prefer_linear_flowchart_paths(&mut diagram);
 
     // SVG colors cannot inherit GPUI's compositing. `overlay` and `border`
     // are translucent layers, so flatten them over the diagram canvas before
@@ -764,11 +770,38 @@ fn render_mermaid_svg(source: &str, palette: &Palette) -> Result<String, String>
     theme.font_family = Cow::Borrowed("-apple-system, BlinkMacSystemFont, sans-serif");
     theme.responsive = false;
 
-    mermaid_svg::render_diagram_with(&diagram, &theme).map_err(|error| error.to_string())
+    let svg =
+        mermaid_svg::render_diagram_with(&diagram, &theme).map_err(|error| error.to_string())?;
+    Ok(svg_with_background(svg, &surface))
 }
 
 fn svg_owned(color: Hsla) -> Cow<'static, str> {
     Cow::Owned(svg_color(color))
+}
+
+/// Mermaid SVGs contain no canvas element, so the root image is transparent
+/// even when its theme has a background color. Put an opaque rectangle first
+/// in the viewBox rather than relying on the host surface behind it.
+fn svg_with_background(svg: String, background: &str) -> String {
+    let Some(root_end) = svg.find('>') else {
+        return svg;
+    };
+    let mut opaque_svg = String::with_capacity(svg.len() + background.len() + 58);
+    opaque_svg.push_str(&svg[..=root_end]);
+    opaque_svg.push_str("<rect width=\"100%\" height=\"100%\" fill=\"");
+    opaque_svg.push_str(background);
+    opaque_svg.push_str("\"/>");
+    opaque_svg.push_str(&svg[root_end + 1..]);
+    opaque_svg
+}
+
+fn prefer_linear_flowchart_paths(diagram: &mut mermaid_svg::Diagram) {
+    if let mermaid_svg::Diagram::Flowchart(flowchart) = diagram
+        && flowchart.config_curve.is_none()
+        && flowchart.default_interpolate.is_none()
+    {
+        flowchart.config_curve = Some(mermaid_svg::EdgeCurve::Linear);
+    }
 }
 
 // ── Render context ─────────────────────────────────────────────────────────
@@ -2339,6 +2372,40 @@ mod tests {
         let document = Metrics::document(15.0, 10.0);
         assert_eq!(document.line_height, 30.0);
         assert_eq!(document.code_line_height, 20.0);
+    }
+
+    #[test]
+    fn mermaid_svg_gets_an_opaque_canvas() {
+        assert_eq!(
+            svg_with_background("<svg viewBox=\"0 0 10 10\"></svg>".to_owned(), "#1a1b1e"),
+            "<svg viewBox=\"0 0 10 10\"><rect width=\"100%\" height=\"100%\" fill=\"#1a1b1e\"/></svg>"
+        );
+    }
+
+    #[test]
+    fn mermaid_flowcharts_prefer_linear_paths_without_overriding_user_curves() {
+        let mut default_curve = mermaid_svg::parse("flowchart TD\n  A --> B").unwrap();
+        prefer_linear_flowchart_paths(&mut default_curve);
+        let mermaid_svg::Diagram::Flowchart(default_flowchart) = default_curve else {
+            panic!("expected flowchart");
+        };
+        assert_eq!(
+            default_flowchart.config_curve,
+            Some(mermaid_svg::EdgeCurve::Linear)
+        );
+
+        let mut explicit_curve = mermaid_svg::parse(
+            "%%{init: {\"flowchart\": {\"curve\": \"step\"}}}%%\nflowchart TD\n  A --> B",
+        )
+        .unwrap();
+        prefer_linear_flowchart_paths(&mut explicit_curve);
+        let mermaid_svg::Diagram::Flowchart(explicit_flowchart) = explicit_curve else {
+            panic!("expected flowchart");
+        };
+        assert_eq!(
+            explicit_flowchart.config_curve,
+            Some(mermaid_svg::EdgeCurve::Step)
+        );
     }
 
     #[test]
