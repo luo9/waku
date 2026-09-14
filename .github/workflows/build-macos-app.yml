@@ -16,7 +16,9 @@ env:
 jobs:
   package:
     name: Package macOS arm64 app
-    runs-on: macos-14
+    # CUA's apple-metal bridge uses Metal APIs introduced with the macOS 15 SDK.
+    # The versioned label keeps the output on GitHub's arm64 macOS runner.
+    runs-on: macos-15
     timeout-minutes: 90
 
     steps:
@@ -35,9 +37,9 @@ jobs:
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: macos-14-rust-1.96.0-local-${{ hashFiles('Cargo.lock') }}
+          key: macos-15-rust-1.96.0-local-${{ hashFiles('Cargo.lock') }}
           restore-keys: |
-            macos-14-rust-1.96.0-local-
+            macos-15-rust-1.96.0-local-
 
       - name: Build self-contained app
         run: |
