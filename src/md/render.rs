@@ -23,14 +23,15 @@ use std::cell::{Cell, RefCell};
 use std::collections::HashMap;
 use std::ops::Range;
 use std::rc::Rc;
+use std::sync::LazyLock;
 use std::time::{Duration, Instant};
 
 use gpui::{
-    AnyElement, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Font, FontStyle,
-    FontWeight, Hsla, InteractiveText, IntoElement, KeyDownEvent, MouseButton, MouseDownEvent,
-    MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point, SharedString, StrikethroughStyle,
-    StyledText, TextLayout, TextRun, UnderlineStyle, Window, canvas, div, font, img, point,
-    prelude::*, px, quad, relative, size,
+    AnyElement, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Font,
+    FontFallbacks, FontStyle, FontWeight, Hsla, InteractiveText, IntoElement, KeyDownEvent,
+    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, Point,
+    SharedString, StrikethroughStyle, StyledText, TextLayout, TextRun, UnderlineStyle, Window,
+    canvas, div, font, img, point, prelude::*, px, quad, relative, size,
 };
 use regex::Regex;
 
@@ -104,12 +105,16 @@ pub struct Metrics {
 }
 
 impl Metrics {
+    /// Codex's prose leading keeps Chinese paragraphs compact without making
+    /// Latin text feel crowded.
+    const LINE_HEIGHT_MULTIPLIER: f32 = 1.625;
+
     /// Assistant response scale, matching the transcript's body text.
     pub const BODY: Self = Self {
         text_size: 14.0,
-        line_height: 21.0,
+        line_height: 14.0 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 20.0,
         block_gap: 10.0,
     };
 
@@ -117,9 +122,9 @@ impl Metrics {
     /// geometry instead of making every existing plain prompt subtly reflow.
     pub const USER_MESSAGE: Self = Self {
         text_size: 14.5,
-        line_height: 21.0,
+        line_height: 14.5 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 20.0,
         block_gap: 10.0,
     };
 
@@ -128,9 +133,9 @@ impl Metrics {
     /// text stays close to prose size and leans on color for its hierarchy.
     pub const COMPACT: Self = Self {
         text_size: 13.5,
-        line_height: 19.5,
+        line_height: 13.5 * Self::LINE_HEIGHT_MULTIPLIER,
         code_text_size: 13.0,
-        code_line_height: 19.5,
+        code_line_height: 20.0,
         block_gap: 7.0,
     };
 
@@ -163,19 +168,32 @@ impl Metrics {
     pub fn document(text_size: f32, code_text_size: f32) -> Self {
         Self {
             text_size,
-            line_height: (text_size * 1.55).round(),
+            line_height: (text_size * Self::LINE_HEIGHT_MULTIPLIER).round(),
             code_text_size,
-            code_line_height: (code_text_size * 1.5).round(),
+            code_line_height: (code_text_size * 1.5).round().max(20.0),
             block_gap: (text_size * 0.72).round(),
         }
     }
 }
 
 pub const SANS_FAMILY: &str = ".SystemUIFont";
-/// The bundled mono face. "SF Mono" only exists on machines that installed it
-/// with Xcode or Terminal, and silently falls back to the sans face when it
-/// does not — which reads as proportional code.
+/// Transcript code uses macOS's SF Mono face with a deterministic CJK cascade.
+pub const TRANSCRIPT_MONO_FAMILY: &str = "SF Mono";
+static TRANSCRIPT_MONO_FALLBACKS: LazyLock<FontFallbacks> = LazyLock::new(|| {
+    FontFallbacks::from_fonts(vec![
+        "PingFang SC".to_owned(),
+        "Maple Mono NF CN".to_owned(),
+    ])
+});
+/// Bundled mono face retained for terminal-like surfaces.
 pub const MONO_FAMILY: &str = "JetBrains Mono";
+
+pub fn transcript_mono_font(weight: FontWeight) -> Font {
+    let mut font = font(TRANSCRIPT_MONO_FAMILY);
+    font.weight = weight;
+    font.fallbacks = Some(TRANSCRIPT_MONO_FALLBACKS.clone());
+    font
+}
 
 /// Inline-code wash geometry. Paint-only: the box overhangs the glyphs
 /// horizontally and insets vertically inside the line box.
@@ -342,15 +360,17 @@ pub fn flatten(
             });
         }
 
-        let mut run_font = font(if run.style.code {
-            MONO_FAMILY
-        } else {
-            SANS_FAMILY
-        });
-        run_font.weight = if run.style.bold && base_weight < FontWeight::SEMIBOLD {
+        let weight = if run.style.bold && base_weight < FontWeight::SEMIBOLD {
             FontWeight::SEMIBOLD
         } else {
             base_weight
+        };
+        let mut run_font = if run.style.code {
+            transcript_mono_font(weight)
+        } else {
+            let mut font = font(SANS_FAMILY);
+            font.weight = weight;
+            font
         };
         run_font.style = if run.style.italic {
             FontStyle::Italic
@@ -415,9 +435,18 @@ pub fn flatten_plain(
     weight: FontWeight,
     color: Hsla,
 ) -> FlatText {
-    let text: SharedString = text.into();
     let mut run_font = font(family);
     run_font.weight = weight;
+    flatten_plain_with_font(text, run_font, color)
+}
+
+/// Like [`flatten_plain`], while preserving an explicit fallback cascade.
+pub fn flatten_plain_with_font(
+    text: impl Into<SharedString>,
+    run_font: Font,
+    color: Hsla,
+) -> FlatText {
+    let text: SharedString = text.into();
     let runs = if text.is_empty() {
         Vec::new()
     } else {
@@ -904,8 +933,20 @@ pub fn plain_text(
     color: Hsla,
     ctx: &Ctx,
 ) -> AnyElement {
+    let mut font = font(family);
+    font.weight = weight;
+    plain_text_with_font(text, font, color, ctx)
+}
+
+/// A selectable plain-text element with an explicit fallback cascade.
+pub fn plain_text_with_font(
+    text: impl Into<SharedString>,
+    font: Font,
+    color: Hsla,
+    ctx: &Ctx,
+) -> AnyElement {
     let key = ctx.next_key();
-    let flat = ctx.flat(key.index, || flatten_plain(text, family, weight, color));
+    let flat = ctx.flat(key.index, || flatten_plain_with_font(text, font, color));
     text_element(&flat, key, ctx)
 }
 
@@ -1283,14 +1324,14 @@ fn markdown_capped<'a>(
     max_blocks: usize,
 ) -> Option<AnyElement> {
     let blocks = view.blocks().collect::<Vec<_>>();
-    let Some((&last, leading)) = blocks.split_last() else {
+    if blocks.is_empty() {
         if ctx.animate_streaming && view.streaming.get() {
             let mut veil = view.veil.borrow_mut();
             veil.begin_frame();
             veil.finish_frame();
         }
         return None;
-    };
+    }
 
     view.sync_style(ctx.palette, &ctx.metrics);
     let ctx = ctx.with_cache(view);
@@ -1299,21 +1340,27 @@ fn markdown_capped<'a>(
     }
     let first = blocks.len().saturating_sub(max_blocks);
     let mut children = Vec::with_capacity(blocks.len() - first);
-    for (block_ix, block) in leading.iter().enumerate().skip(first) {
+    view.volatile_from
+        .set(block_ordinal_base(view.parser.display_tail_start()));
+    for (block_ix, block) in blocks.iter().enumerate().skip(first) {
         ctx.next_ordinal.set(block_ordinal_base(block_ix));
-        children.push(render_block(block, &ctx));
+        let gap_after = blocks
+            .get(block_ix + 1)
+            .map(|next| markdown_block_gap(block, next, &ctx.metrics))
+            .unwrap_or_default();
+        children.push(
+            div()
+                .w_full()
+                .min_w_0()
+                .mb(px(gap_after))
+                .child(render_block(block, &ctx))
+                .into_any_element(),
+        );
         debug_assert!(
             ctx.next_ordinal.get() - block_ordinal_base(block_ix) < 1 << BLOCK_ORDINAL_STRIDE_BITS,
             "a single block overflowed its ordinal stride"
         );
     }
-    // Everything before the final block is settled, so its flattened elements
-    // stay cacheable across appends.
-    let last_base = block_ordinal_base(blocks.len() - 1);
-    ctx.next_ordinal.set(last_base);
-    view.volatile_from
-        .set(block_ordinal_base(view.parser.display_tail_start()));
-    children.push(render_block(last, &ctx));
     if ctx.animate_streaming && view.streaming.get() {
         // Every element visible on the attach pass has synchronously adopted
         // its baseline. Elements introduced by later appends should now fade.
@@ -1325,7 +1372,6 @@ fn markdown_capped<'a>(
         .min_w_0()
         .flex()
         .flex_col()
-        .gap(px(ctx.metrics.block_gap))
         .children(children);
     Some(
         if ctx.math_enabled
@@ -1341,6 +1387,37 @@ fn markdown_capped<'a>(
         } else {
             element.into_any_element()
         },
+    )
+}
+
+fn markdown_block_gap(current: &Block, next: &Block, metrics: &Metrics) -> f32 {
+    if is_han_paragraph(current) && is_han_paragraph(next) {
+        metrics.block_gap * 0.4
+    } else {
+        metrics.block_gap
+    }
+}
+
+fn is_han_paragraph(block: &Block) -> bool {
+    let Block::Paragraph { runs } = block else {
+        return false;
+    };
+    let mut han = 0usize;
+    let mut alphabetic = 0usize;
+    for character in runs.iter().flat_map(|run| run.text.chars()) {
+        if is_han(character) {
+            han += 1;
+        } else if character.is_alphabetic() {
+            alphabetic += 1;
+        }
+    }
+    han >= 4 && han.saturating_mul(3) >= alphabetic
+}
+
+fn is_han(character: char) -> bool {
+    matches!(
+        character as u32,
+        0x3400..=0x4DBF | 0x4E00..=0x9FFF | 0xF900..=0xFAFF
     )
 }
 
@@ -1453,7 +1530,7 @@ fn render_block(block: &Block, ctx: &Ctx) -> AnyElement {
 }
 
 fn render_list(ordered_start: Option<u64>, items: &[ListItem], ctx: &Ctx) -> AnyElement {
-    let marker_width = if ordered_start.is_some() { 22.0 } else { 14.0 };
+    let marker_width = list_marker_width(&ctx.metrics);
     let rendered = items
         .iter()
         .enumerate()
@@ -1506,6 +1583,10 @@ fn render_list(ordered_start: Option<u64>, items: &[ListItem], ctx: &Ctx) -> Any
         .gap(px(ctx.metrics.block_gap * 0.5))
         .children(rendered)
         .into_any_element()
+}
+
+fn list_marker_width(metrics: &Metrics) -> f32 {
+    metrics.line_height + metrics.text_size * 0.375
 }
 
 /// A list marker. Markers are not selectable: they are generated ornament, not
@@ -1641,8 +1722,7 @@ fn render_code_block(language: Option<&str>, code: &str, ctx: &Ctx) -> AnyElemen
     // code block is exactly the case the cache exists for.
     let flat = ctx.flat(key.index, || {
         let lang = language.and_then(highlight::lang_for_tag);
-        let mut code_font = font(MONO_FAMILY);
-        code_font.weight = FontWeight::NORMAL;
+        let code_font = transcript_mono_font(FontWeight::NORMAL);
         FlatText {
             text: SharedString::from(code.to_owned()),
             runs: code_runs(code, lang, &code_font, ctx.palette),
@@ -2083,6 +2163,40 @@ mod tests {
         let empty = flatten_plain("", SANS_FAMILY, FontWeight::NORMAL, palette().text);
         assert_runs_tile(&empty);
         assert!(empty.runs.is_empty());
+    }
+
+    #[test]
+    fn transcript_mono_uses_the_explicit_macos_cjk_cascade() {
+        let font = transcript_mono_font(FontWeight::NORMAL);
+        assert_eq!(font.family, TRANSCRIPT_MONO_FAMILY);
+        let fallbacks = font
+            .fallbacks
+            .as_ref()
+            .expect("transcript code font must provide CJK fallbacks")
+            .fallback_list()
+            .iter()
+            .map(String::as_str)
+            .collect::<Vec<_>>();
+        assert_eq!(fallbacks, vec!["PingFang SC", "Maple Mono NF CN"]);
+    }
+
+    #[test]
+    fn chinese_paragraphs_use_a_tighter_gap_and_metrics_scale_consistently() {
+        let chinese = Block::Paragraph {
+            runs: vec![InlineRun::plain("中文段落需要紧凑排版")],
+        };
+        let english = Block::Paragraph {
+            runs: vec![InlineRun::plain(
+                "English paragraphs retain normal spacing.",
+            )],
+        };
+        let metrics = Metrics::BODY.scaled(14.0, 13.0);
+
+        assert_eq!(metrics.line_height, 23.0);
+        assert_eq!(metrics.code_line_height, 20.0);
+        assert_eq!(markdown_block_gap(&chinese, &chinese, &metrics), 4.0);
+        assert_eq!(markdown_block_gap(&chinese, &english, &metrics), 10.0);
+        assert_eq!(list_marker_width(&metrics), 28.25);
     }
 
     #[test]
