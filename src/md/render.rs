@@ -1555,7 +1555,7 @@ fn markdown_capped<'a>(
         let child = render_block(block, &ctx);
         let gap_after = blocks
             .get(block_ix + 1)
-            .map(|next| markdown_block_gap(&block.block, &next.block, &ctx.metrics))
+            .map(|next| markdown_block_gap(block, next, &ctx.metrics))
             .unwrap_or_default();
         children.push(
             div()
