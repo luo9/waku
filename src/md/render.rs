@@ -747,6 +747,7 @@ fn mermaid_sources(block: &Block, sources: &mut HashSet<String>) {
         Block::Paragraph { .. }
         | Block::Image { .. }
         | Block::Heading { .. }
+        | Block::DisplayMath { .. }
         | Block::Table { .. }
         | Block::Rule
         | Block::CodeBlock { .. } => {}
