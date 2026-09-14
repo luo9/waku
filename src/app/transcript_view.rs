@@ -2296,7 +2296,7 @@ impl Waku {
                     .flex()
                     .flex_col()
                     .gap(px(8.0))
-                    .font_family(md::render::MONO_FAMILY)
+                    .font(md::render::transcript_mono_font(FontWeight::NORMAL))
                     .text_size(px(mono_size))
                     .line_height(px(mono_line))
                     .text_color(theme.text_secondary)
@@ -2401,10 +2401,11 @@ impl Waku {
                                             .track_scroll(&output_viewport.scroll_handle)
                                             .py(px(4.0))
                                             .pr(px(8.0))
-                                            .child(md::render::plain_text(
+                                            .child(md::render::plain_text_with_font(
                                                 content.clone(),
-                                                md::render::MONO_FAMILY,
-                                                FontWeight::NORMAL,
+                                                md::render::transcript_mono_font(
+                                                    FontWeight::NORMAL,
+                                                ),
                                                 theme.text_secondary,
                                                 &ctx,
                                             ))
@@ -2439,10 +2440,9 @@ impl Waku {
                             );
                         } else {
                             section_view = section_view.child(div().w_full().min_w_0().child(
-                                md::render::plain_text(
+                                md::render::plain_text_with_font(
                                     content.clone(),
-                                    md::render::MONO_FAMILY,
-                                    FontWeight::NORMAL,
+                                    md::render::transcript_mono_font(FontWeight::NORMAL),
                                     theme.text_secondary,
                                     &ctx,
                                 ),
@@ -2498,7 +2498,7 @@ impl Waku {
             .track_scroll(&viewport.scroll_handle)
             .flex()
             .flex_col()
-            .font_family(md::render::MONO_FAMILY)
+            .font(md::render::transcript_mono_font(FontWeight::NORMAL))
             .text_size(px(diff_mono_size))
             .line_height(px(diff_mono_line))
             .on_scroll_wheel(move |_, _, cx| contain_scroll(&wheel_scroll, cx));
@@ -2646,7 +2646,7 @@ fn activity_diff_break_row(label: Option<String>, theme: &Theme) -> AnyElement {
         .flex_none()
         .flex()
         .items_center()
-        .font_family(md::render::MONO_FAMILY)
+        .font(md::render::transcript_mono_font(FontWeight::NORMAL))
         // Fixed like the Review panel's gap and hunk captions: a caption in
         // the code surface follows neither font setting.
         .text_size(px(12.5))
