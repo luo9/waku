@@ -46,6 +46,9 @@ pub struct Theme {
     pub sidebar: Hsla,
     pub sidebar_drag_background: Hsla,
     pub sidebar_item_background: Hsla,
+    /// Main chat/transcript column. Kept separate from generic surfaces so
+    /// reading can be paper-white in light mode without flattening panels.
+    pub transcript: Hsla,
     pub surface: Hsla,
     pub raised: Hsla,
     pub composer: Hsla,
@@ -110,6 +113,7 @@ impl Theme {
             },
             sidebar_drag_background: rgb(0x181818).into(),
             sidebar_item_background: hsla(0.0, 0.0, 0.941, 0.06),
+            transcript: rgb(0x1A1A1A).into(),
             surface: rgb(0x1A1A1A).into(),
             raised: rgb(0x232323).into(),
             composer: rgb(0x212121).into(),
@@ -159,6 +163,7 @@ impl Theme {
             },
             sidebar_drag_background: rgb(0xF3F3F3).into(),
             sidebar_item_background: hsla(0.0, 0.0, 0.078, 0.06),
+            transcript: rgb(0xFFFFFF).into(),
             surface: rgb(0xF6F5F6).into(),
             raised: rgb(0xECECEC).into(),
             composer: rgb(0xFFFFFF).into(),

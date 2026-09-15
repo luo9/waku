@@ -353,7 +353,7 @@ impl Render for Waku {
                     .min_w_0()
                     .flex()
                     .flex_col()
-                    .bg(theme.surface)
+                    .bg(theme.transcript)
                     .when(panels.sidebar > 0.0, |element| {
                         element.border_l_1().border_color(theme.sidebar_border)
                     })

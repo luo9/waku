@@ -537,7 +537,7 @@ impl Render for ConversationNavigationRail {
             self.turn_list_state.scroll_px_offset_for_scrollbar().y,
             self.turn_list_state.max_offset_for_scrollbar().y,
         );
-        let transparent_surface = theme.surface.opacity(0.0);
+        let transparent_transcript = theme.transcript.opacity(0.0);
 
         let rail = div()
             .id("conversation-navigation-rail")
@@ -567,8 +567,8 @@ impl Render for ConversationNavigationRail {
                         .h(px(NAVIGATION_RAIL_FADE_HEIGHT))
                         .bg(linear_gradient(
                             180.0,
-                            linear_color_stop(theme.surface, 0.0),
-                            linear_color_stop(transparent_surface, 1.0),
+                            linear_color_stop(theme.transcript, 0.0),
+                            linear_color_stop(transparent_transcript, 1.0),
                         )),
                 )
             })
@@ -582,8 +582,8 @@ impl Render for ConversationNavigationRail {
                         .h(px(NAVIGATION_RAIL_FADE_HEIGHT))
                         .bg(linear_gradient(
                             180.0,
-                            linear_color_stop(transparent_surface, 0.0),
-                            linear_color_stop(theme.surface, 1.0),
+                            linear_color_stop(transparent_transcript, 0.0),
+                            linear_color_stop(theme.transcript, 1.0),
                         )),
                 )
             });
