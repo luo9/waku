@@ -132,8 +132,10 @@ impl Theme {
             gauge: rgb(0x3B82F6).into(),
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.55),
-            code_text: rgb(0xE0A882).into(),
-            code_wash: hsla(220.0 / 360.0, 0.10, 0.90, 0.08),
+            // Inline code is distinguished by SF Mono and its pill, rather
+            // than a syntax-like accent color.
+            code_text: rgb(0xE2E2E2).into(),
+            code_wash: hsla(0.0, 0.0, 0.90, 0.08),
 
             inverse: rgb(0xE7E9EC).into(),
             on_inverse: rgb(0x17181C).into(),
@@ -179,8 +181,10 @@ impl Theme {
             gauge: rgb(0x2563EB).into(),
 
             selection: hsla(211.0 / 360.0, 1.0, 0.50, 0.35),
-            code_text: rgb(0x9A5528).into(),
-            code_wash: hsla(220.0 / 360.0, 0.10, 0.12, 0.07),
+            // Keep the Codex-like light-code treatment neutral: dark
+            // graphite glyphs on a quiet gray wash, with no warm tint.
+            code_text: rgb(0x242424).into(),
+            code_wash: hsla(0.0, 0.0, 0.12, 0.07),
 
             inverse: rgb(0x202227).into(),
             on_inverse: rgb(0xF8F8F9).into(),

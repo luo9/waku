@@ -205,7 +205,9 @@ pub fn transcript_mono_font(weight: FontWeight) -> Font {
 /// Inline-code wash geometry. Paint-only: the box overhangs the glyphs
 /// horizontally and insets vertically inside the line box.
 const CODE_WASH_RADIUS: f32 = 4.0;
-const CODE_WASH_PAD_X: f32 = 2.5;
+/// Codex-style code pills leave enough horizontal air for SF Mono's square
+/// glyphs without changing the paragraph's measured height.
+const CODE_WASH_PAD_X: f32 = 4.5;
 const CODE_WASH_INSET_Y: f32 = 1.5;
 
 /// Heading scale relative to body text, by level.
@@ -2497,6 +2499,26 @@ mod tests {
     }
 
     #[test]
+    fn inline_code_uses_the_neutral_body_palette_and_codex_pill_padding() {
+        let theme = Theme::light();
+        let palette = Palette::from_theme(&theme);
+        let flat = flatten(
+            &runs_of("plain `code`"),
+            &palette,
+            FontWeight::NORMAL,
+            palette.text,
+        );
+        let code_run = flat
+            .runs
+            .iter()
+            .find(|run| run.len == "code".len())
+            .expect("the inline code run should be present");
+
+        assert_eq!(code_run.color, theme.text);
+        assert_eq!(CODE_WASH_PAD_X, 4.5);
+    }
+
+    #[test]
     fn a_streaming_link_is_styled_but_not_clickable() {
         let flat = flatten(
             &runs_of(&format!("see [docs]({PENDING_LINK_URL})")),
@@ -2557,12 +2579,10 @@ mod tests {
     #[test]
     fn chinese_paragraphs_use_a_tighter_gap_and_metrics_scale_consistently() {
         let chinese = Block::Paragraph {
-            runs: vec![InlineRun::plain("中文段落需要紧凑排版")],
+            runs: runs_of("中文段落需要紧凑排版"),
         };
         let english = Block::Paragraph {
-            runs: vec![InlineRun::plain(
-                "English paragraphs retain normal spacing.",
-            )],
+            runs: runs_of("English paragraphs retain normal spacing."),
         };
         let metrics = Metrics::BODY.scaled(14.0, 13.0);
 

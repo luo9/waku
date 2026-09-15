@@ -87,6 +87,7 @@ rtk git rebase --abort
 - 保留官方 `src/md/render.rs` 的新块类型、数学渲染和上下文 API；在其上重新应用本地字体与间距，而不是用旧文件整体覆盖。
 - 保留本地等宽字体级联：`SF Mono`，回退到 `PingFang SC`、`Maple Mono NF CN`。
 - 保留本地 Markdown 行高：正文比例 `1.625`，代码块 `20px`。这是与 `feature/markdown-line-height-1-8` 一致的排版基线。
+- 保留内联代码的 Codex 风格：`4.5px` 左右留白、`4px` 圆角、`1.5px` 上下内缩；以等宽字体和中性灰色胶囊区分，不使用棕色或语法高亮式字色。
 - 保留 Mermaid 的后台 SVG 缓存。SVG 解析必须停留在 `prepare_mermaid` 的后台任务中；行构建和 `render` 路径只能读取缓存。
 - 官方新增 `Block` 枚举变体时，更新 `mermaid_sources` 的穷尽匹配。非代码块应显式跳过；例如 `Block::DisplayMath { .. }`。否则 Rust 会以 `E0004` 阻止构建。
 
